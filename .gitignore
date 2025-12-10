@@ -1,0 +1,5 @@
+*.retry
+*.log
+.DS_Store
+.vscode
+/tmp/

@@ -1,0 +1,8 @@
+---
+# List of files to audit
+audit_files:
+  - src: "sample_app/standard_config.conf"
+    dest: "/tmp/app_config.conf"
+  # Add more files here:
+  # - src: "etc/ssh/sshd_config"
+  #   dest: "/etc/ssh/sshd_config"

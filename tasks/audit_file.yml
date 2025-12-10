@@ -1,0 +1,134 @@
+---
+- name: Calculate hash of local reference file (SoT)
+  delegate_to: localhost
+  stat:
+    path: "{{ playbook_dir }}/source_of_truth/{{ audit_item.src }}"
+    checksum_algorithm: sha256
+  register: local_ref_stat
+
+- name: Fail if local reference file is missing
+  fail:
+    msg: "Local reference file not found: {{ playbook_dir }}/source_of_truth/{{ audit_item.src }}"
+  when: not local_ref_stat.stat.exists
+
+- name: Get hash of remote configuration file
+  stat:
+    path: "{{ audit_item.dest }}"
+    checksum_algorithm: sha256
+  register: remote_file_stat
+
+- name: Initialize drift status
+  set_fact:
+    drift_detected: false
+
+- name: Check for Drift
+  set_fact:
+    drift_detected: true
+  when: 
+    - remote_file_stat.stat.exists
+    - local_ref_stat.stat.checksum != remote_file_stat.stat.checksum
+
+# --- DIFF SECTION ---
+- name: Fetch remote file for diff (if drift detected)
+  fetch:
+    src: "{{ audit_item.dest }}"
+    dest: "/tmp/ansible_drift_{{ inventory_hostname }}_fetched"
+    flat: yes
+  when: drift_detected
+
+- name: Generate Diff
+  delegate_to: localhost
+  shell: "diff -U 0 '{{ playbook_dir }}/source_of_truth/{{ audit_item.src }}' '/tmp/ansible_drift_{{ inventory_hostname }}_fetched' | grep -vE '^(---|\\+\\+\\+|@@)' || true"
+  register: diff_output
+  changed_when: false
+  when: drift_detected
+
+- name: Display Diff
+  debug:
+    msg: |
+      ⚠️  DRIFT DETECTED on {{ inventory_hostname }}
+      File: {{ audit_item.dest }}
+      --- DIFF OUTPUT ---
+      {{ diff_output.stdout }}
+  when: drift_detected
+
+# --- FIX SECTION ---
+- name: Ask for confirmation to fix drift
+  pause:
+    prompt: "Drift detected on {{ inventory_hostname }} for {{ audit_item.dest }}. Overwrite remote config with SoT? (y/n)"
+  register: prompt_result
+  when: 
+    - drift_detected
+    - ask_fix | default(false) | bool
+    - not auto_fix | default(false) | bool
+
+- name: Determine if fix should be applied
+  set_fact:
+    should_fix: "{{ auto_fix | default(false) | bool or (prompt_result.user_input | default('n') | trim | lower == 'y') }}"
+  when: drift_detected
+
+- name: Apply Source of Truth (Fix Drift)
+  copy:
+    src: "{{ playbook_dir }}/source_of_truth/{{ audit_item.src }}"
+    dest: "{{ audit_item.dest }}"
+  when: 
+    - drift_detected
+    - should_fix | default(false) | bool
+
+# --- LOGGING SECTION ---
+- name: Get current timestamp
+  delegate_to: localhost
+  command: date "+%Y-%m-%d %H:%M:%S"
+  register: current_date
+  changed_when: false
+  run_once: true
+
+- name: Log Audit Result (Drift Detected - Not Fixed)
+  delegate_to: localhost
+  throttle: 1
+  lineinfile:
+    path: "{{ playbook_dir }}/audit_history.log"
+    create: yes
+    line: "[{{ current_date.stdout }}] [DRIFT] Host: {{ inventory_hostname }} | File: {{ audit_item.dest }} | Ref: {{ audit_item.src }}"
+  when: 
+    - drift_detected
+    - not (should_fix | default(false) | bool)
+
+- name: Log Audit Result (Drift Fixed)
+  delegate_to: localhost
+  throttle: 1
+  lineinfile:
+    path: "{{ playbook_dir }}/audit_history.log"
+    create: yes
+    line: "[{{ current_date.stdout }}] [FIXED] Host: {{ inventory_hostname }} | File: {{ audit_item.dest }} | Ref: {{ audit_item.src }}"
+  when: 
+    - drift_detected
+    - should_fix | default(false) | bool
+
+- name: Log Audit Result (Success)
+  delegate_to: localhost
+  throttle: 1
+  lineinfile:
+    path: "{{ playbook_dir }}/audit_history.log"
+    create: yes
+    line: "[{{ current_date.stdout }}] [OK]    Host: {{ inventory_hostname }} | File: {{ audit_item.dest }}"
+  when: 
+    - remote_file_stat.stat.exists
+    - not drift_detected
+
+- name: Log Audit Result (Missing File)
+  delegate_to: localhost
+  throttle: 1
+  lineinfile:
+    path: "{{ playbook_dir }}/audit_history.log"
+    create: yes
+    line: "[{{ current_date.stdout }}] [MISS]  Host: {{ inventory_hostname }} | File: {{ audit_item.dest }} | Status: FILE NOT FOUND"
+  when: not remote_file_stat.stat.exists
+
+- name: Fail run if drift detected (and not fixed)
+  fail:
+    msg: "Configuration drift detected on {{ inventory_hostname }} for file {{ audit_item.dest }}"
+  when: 
+    - drift_detected
+    - not (should_fix | default(false) | bool)
+  ignore_errors: yes

@@ -1,0 +1,5 @@
+---
+# List of files to audit
+audit_files:
+  - src: "sample_app/custom_config.conf"
+    dest: "/tmp/app_config.conf"

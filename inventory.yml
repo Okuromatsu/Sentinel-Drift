@@ -1,0 +1,16 @@
+all:
+  hosts:
+    # Example hosts (using local connection for testing)
+    web_server_01:
+      ansible_host: 127.0.0.1
+      ansible_connection: local
+    db_server_01:
+      ansible_host: 127.0.0.1
+      ansible_connection: local
+  children:
+    standard_servers:
+      hosts:
+        web_server_01:
+    custom_servers:
+      hosts:
+        db_server_01:

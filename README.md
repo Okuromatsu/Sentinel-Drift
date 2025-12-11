@@ -80,13 +80,71 @@ Create a YAML file in `config_maps/` matching your group name (e.g., `standard_s
 Define the `audit_files` list to tell Sentinel-Drift which files to check.
 
 ```yaml
-# Example: config_maps/standard_servers.yml
+### 3. Map Files to Groups (`config_maps/`)
+Create a YAML file in `config_maps/` matching your group name (e.g., `standard_servers.yml`).
+Define the `audit_files` list to tell Sentinel-Drift which files to check.
+
+You can now also specify **permissions** (`mode`), **owner**, and **group**.
+
+```yaml
+# config_maps/standard_servers.yml
 audit_files:
   - src: "sample_app/standard_config.conf" # Path inside source_of_truth/
     dest: "/etc/app/config.conf"           # Path on the remote server
+    mode: "0644"                           # Optional: Check permissions
+    owner: "root"                          # Optional: Check owner
+    group: "root"                          # Optional: Check group
   
   - src: "ssh/sshd_config"
     dest: "/etc/ssh/sshd_config"
+    mode: "0600"
+```
+
+### 4. Run the Audit
+Run the main playbook:
+```bash
+ansible-playbook sentinel_drift.yml
+```
+
+### 5. View the Dashboard 📊
+After the run, open the generated `report.html` file in your browser to see the compliance dashboard.
+
+### 6. Fix the Drift
+You have two options to repair configuration drift:
+
+**Option A: Interactive Fix (Recommended)**
+Ask for confirmation before overwriting any file.
+```bash
+ansible-playbook sentinel_drift.yml -e "ask_fix=true"
+```
+
+**Option B: Auto-Fix (Use with Caution)**
+Automatically overwrite all drifted files with the Source of Truth.
+*Note: You will be prompted once at the start to confirm this dangerous action.*
+```bash
+ansible-playbook sentinel_drift.yml -e "auto_fix=true"
+```
+
+## 🔐 Handling Secrets (Ansible Vault)
+
+If your configuration files contain secrets (passwords, API keys), **DO NOT** store them in plain text. Use Ansible Vault.
+
+1.  **Encrypt your file:**
+    ```bash
+    ansible-vault encrypt source_of_truth/database/db_config.conf
+    ```
+2.  **Run Sentinel-Drift with the vault password:**
+    ```bash
+    ansible-playbook sentinel_drift.yml --ask-vault-pass
+    ```
+    Sentinel-Drift will automatically decrypt the file in memory to compare it with the remote server.
+
+## 📊 Logs
+Check `audit_history.log` for a summary of the execution:
+```
+[2023-10-27 10:00:00] [OK]    Host: web_01 | File: /etc/app/config.conf
+[2023-10-27 10:00:01] [DRIFT] Host: db_01  | File: /etc/app/config.conf | Ref: custom_config.conf
+[2023-10-27 10:05:00] [FIXED] Host: db_01  | File: /etc/app/config.conf | Ref: custom_config.conf
 ```
 
 ### 4. Run the Audit

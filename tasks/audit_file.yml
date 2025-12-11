@@ -36,6 +36,17 @@
     - remote_file_stat.stat.exists
     - local_ref_stat.stat.checksum != remote_file_stat.stat.checksum
 
+- name: Check for Drift (Metadata Mismatch)
+  set_fact:
+    drift_detected: true
+    drift_type: "metadata"
+  when: 
+    - remote_file_stat.stat.exists
+    - (audit_item.mode is defined and remote_file_stat.stat.mode != audit_item.mode) or
+      (audit_item.owner is defined and remote_file_stat.stat.pw_name != audit_item.owner) or
+      (audit_item.group is defined and remote_file_stat.stat.gr_name != audit_item.group)
+    - drift_type == "none" # Content drift takes precedence for simplicity, or remove this to detect both
+
 # --- DIFF SECTION ---
 - name: Fetch remote file for diff (if modified)
   fetch:
@@ -60,6 +71,15 @@
       {{ diff_output.stdout }}
   when: drift_detected and drift_type == 'modified'
 
+- name: Display Metadata Drift
+  debug:
+    msg: |
+      ⚠️  METADATA DRIFT on {{ inventory_hostname }}
+      File: {{ audit_item.dest }}
+      Expected: Mode={{ audit_item.mode | default('ANY') }}, Owner={{ audit_item.owner | default('ANY') }}, Group={{ audit_item.group | default('ANY') }}
+      Found:    Mode={{ remote_file_stat.stat.mode }}, Owner={{ remote_file_stat.stat.pw_name }}, Group={{ remote_file_stat.stat.gr_name }}
+  when: drift_detected and drift_type == 'metadata'
+
 - name: Display Missing File Warning
   debug:
     msg: "⚠️  FILE MISSING on {{ inventory_hostname }}: {{ audit_item.dest }}"
@@ -71,13 +91,28 @@
     prompt: "Drift detected ({{ drift_type }}) on {{ inventory_hostname }} for {{ audit_item.dest }}. Restore/Overwrite with SoT? (y/n)"
   register: prompt_result
   when: 
+- name: Apply Source of Truth (Fix Drift - Content)
+  copy:
+    src: "{{ playbook_dir }}/source_of_truth/{{ audit_item.src }}"
+    dest: "{{ audit_item.dest }}"
+    mode: "{{ audit_item.mode | default(omit) }}"
+    owner: "{{ audit_item.owner | default(omit) }}"
+    group: "{{ audit_item.group | default(omit) }}"
+  when: 
     - drift_detected
-    - ask_fix | default(false) | bool
-    - not auto_fix | default(false) | bool
+    - should_fix | default(false) | bool
+    - drift_type in ['modified', 'missing']
 
-- name: Determine if fix should be applied
-  set_fact:
-    should_fix: "{{ auto_fix | default(false) | bool or (prompt_result.user_input | default('n') | trim | lower == 'y') }}"
+- name: Apply Source of Truth (Fix Drift - Metadata Only)
+  file:
+    path: "{{ audit_item.dest }}"
+    mode: "{{ audit_item.mode | default(omit) }}"
+    owner: "{{ audit_item.owner | default(omit) }}"
+    group: "{{ audit_item.group | default(omit) }}"
+  when: 
+    - drift_detected
+    - should_fix | default(false) | bool
+    - drift_type == 'metadata'alse) | bool or (prompt_result.user_input | default('n') | trim | lower == 'y') }}"
   when: drift_detected
 
 - name: Apply Source of Truth (Fix Drift)
@@ -127,10 +162,17 @@
     line: "[{{ current_date.stdout }}] [OK]    Host: {{ inventory_hostname }} | File: {{ audit_item.dest }}"
   when: not drift_detected
 
-- name: Fail run if drift detected (and not fixed)
-  fail:
-    msg: "Configuration drift detected on {{ inventory_hostname }} for file {{ audit_item.dest }}"
-  when: 
-    - drift_detected
-    - not (should_fix | default(false) | bool)
-  ignore_errors: yes
+- name: Register Audit Result for Report
+  set_fact:
+    current_file_result:
+      path: "{{ audit_item.dest }}"
+      drift: "{{ drift_detected }}"
+      drift_type: "{{ drift_type }}"
+      diff_lines: "{{ diff_output.stdout_lines | default([]) }}"
+      expected_meta: "Mode={{ audit_item.mode | default('ANY') }}, Owner={{ audit_item.owner | default('ANY') }}, Group={{ audit_item.group | default('ANY') }}"
+      found_meta: "Mode={{ remote_file_stat.stat.mode | default('N/A') }}, Owner={{ remote_file_stat.stat.pw_name | default('N/A') }}, Group={{ remote_file_stat.stat.gr_name | default('N/A') }}"
+
+- name: Append to Host Results
+  set_fact:
+    host_audit_results: "{{ host_audit_results | default([]) + [current_file_result] }}"
+

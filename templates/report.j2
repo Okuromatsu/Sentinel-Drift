@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sentinel-Drift Report</title>
+    <style>
+        :root {
+            --bg-color: #f4f7f6;
+            --card-bg: #ffffff;
+            --text-color: #333;
+            --success-color: #2ecc71;
+            --warning-color: #f39c12;
+            --danger-color: #e74c3c;
+            --border-color: #ddd;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 40px;
+        }
+
+        /* Dashboard Cards */
+        .dashboard {
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+            margin-bottom: 40px;
+        }
+
+        .chart-container {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            width: 300px;
+            text-align: center;
+        }
+
+        .donut-chart {
+            position: relative;
+            width: 200px;
+            height: 200px;
+            margin: 0 auto 20px;
+            border-radius: 50%;
+            background: conic-gradient(
+                var(--success-color) 0% {{ (stats.compliant / stats.total * 100) | round(1) }}%, 
+                var(--warning-color) {{ (stats.compliant / stats.total * 100) | round(1) }}% {{ ((stats.compliant + stats.partial) / stats.total * 100) | round(1) }}%, 
+                var(--danger-color) {{ ((stats.compliant + stats.partial) / stats.total * 100) | round(1) }}% 100%
+            );
+        }
+
+        .donut-hole {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 120px;
+            height: 120px;
+            background: var(--card-bg);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+        }
+
+        .donut-hole span {
+            font-size: 2em;
+            font-weight: bold;
+        }
+
+        .legend {
+            text-align: left;
+            margin-top: 15px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+
+        .color-box {
+            width: 15px;
+            height: 15px;
+            margin-right: 10px;
+            border-radius: 3px;
+        }
+
+        /* Server List */
+        .server-list {
+            background: var(--card-bg);
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .server-item {
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .server-header {
+            padding: 15px 20px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background 0.2s;
+        }
+
+        .server-header:hover {
+            background-color: #f9f9f9;
+        }
+
+        .server-header.status-ok { border-left: 5px solid var(--success-color); }
+        .server-header.status-partial { border-left: 5px solid var(--warning-color); }
+        .server-header.status-fail { border-left: 5px solid var(--danger-color); }
+
+        .server-details {
+            display: none;
+            padding: 20px;
+            background-color: #fafafa;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .file-item {
+            margin-bottom: 15px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            background: white;
+        }
+
+        .file-header {
+            padding: 10px;
+            background: #eee;
+            cursor: pointer;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .file-header.drift { color: var(--danger-color); }
+        .file-header.ok { color: var(--success-color); }
+
+        .file-diff {
+            display: none;
+            padding: 10px;
+            background: #2d2d2d;
+            color: #ccc;
+            font-family: 'Courier New', Courier, monospace;
+            white-space: pre-wrap;
+            overflow-x: auto;
+        }
+
+        .diff-add { color: #2ecc71; }
+        .diff-del { color: #e74c3c; }
+        .diff-meta { color: #f1c40f; }
+
+        /* Toggle Logic */
+        .active { display: block; }
+        .rotate { transform: rotate(90deg); }
+        .arrow { transition: transform 0.3s; }
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🛡️ Sentinel-Drift Report</h1>
+    <p style="text-align: center;">Generated on: {{ ansible_date_time.date }} {{ ansible_date_time.time }}</p>
+
+    <div class="dashboard">
+        <div class="chart-container">
+            <h3>Compliance Overview</h3>
+            <div class="donut-chart">
+                <div class="donut-hole">
+                    <span>{{ stats.total }}</span>
+                    <small>Servers</small>
+                </div>
+            </div>
+            <div class="legend">
+                <div class="legend-item"><div class="color-box" style="background: var(--success-color)"></div> Fully Compliant ({{ stats.compliant }})</div>
+                <div class="legend-item"><div class="color-box" style="background: var(--warning-color)"></div> Partially Compliant ({{ stats.partial }})</div>
+                <div class="legend-item"><div class="color-box" style="background: var(--danger-color)"></div> Non-Compliant ({{ stats.non_compliant }})</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="server-list">
+        {% for host in report_data %}
+        <div class="server-item">
+            <div class="server-header status-{{ host.status }}" onclick="toggle('server-{{ loop.index }}')">
+                <span><strong>{{ host.name }}</strong></span>
+                <span>
+                    {% if host.status == 'ok' %}✅ Compliant
+                    {% elif host.status == 'partial' %}⚠️ Partial
+                    {% else %}❌ Failed{% endif %}
+                    <span class="arrow">▶</span>
+                </span>
+            </div>
+            <div id="server-{{ loop.index }}" class="server-details">
+                {% for file in host.files %}
+                <div class="file-item">
+                    <div class="file-header {% if file.drift %}drift{% else %}ok{% endif %}" {% if file.drift %}onclick="toggle('file-{{ host.name }}-{{ loop.index }}')"{% endif %}>
+                        <span>{{ file.path }}</span>
+                        <span>{% if file.drift %}DRIFT DETECTED ({{ file.drift_type }}) 🔽{% else %}OK ✅{% endif %}</span>
+                    </div>
+                    {% if file.drift %}
+                    <div id="file-{{ host.name }}-{{ loop.index }}" class="file-diff">
+                        {% if file.drift_type == 'missing' %}
+                        <span class="diff-del">FILE MISSING ON REMOTE SERVER</span>
+                        {% elif file.drift_type == 'metadata' %}
+                        <span class="diff-meta">METADATA DRIFT:</span>
+                        Expected: {{ file.expected_meta }}
+                        Found:    {{ file.found_meta }}
+                        {% else %}
+                        {% for line in file.diff_lines %}
+                        {% if line.startswith('+') %}<span class="diff-add">{{ line }}</span>{% elif line.startswith('-') %}<span class="diff-del">{{ line }}</span>{% else %}{{ line }}{% endif %}
+                        <br>
+                        {% endfor %}
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+    function toggle(id) {
+        var element = document.getElementById(id);
+        if (element.style.display === "block") {
+            element.style.display = "none";
+        } else {
+            element.style.display = "block";
+        }
+    }
+</script>
+
+</body>
+</html>

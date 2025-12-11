@@ -31,16 +31,41 @@ We kept it simple. No complex roles, just what you need.
 └── audit_history.log       # Execution logs
 ```
 
+## 📦 Dependencies
+
+Sentinel-Drift is built on **Ansible**. You don't need to install any agent on your remote servers, but you need a control machine (your laptop or a CI/CD runner) with the following requirements:
+
+*   **Ansible Core**: Version 2.9 or higher.
+*   **Python**: Version 3.8 or higher (on the control machine).
+*   **SSH Access**: The control machine must have SSH access to the target servers (using keys is recommended).
+
+To install Ansible on your control machine:
+```bash
+# MacOS (Homebrew)
+brew install ansible
+
+# Linux (Ubuntu/Debian)
+sudo apt update && sudo apt install ansible
+
+# Python (pip)
+pip install ansible
+```
+
+Please refer to Ansible official documentation if you have an installation issue.
+
 ## 🛠️ Usage Guide
 
 ### 1. Define your Inventory (`inventory.yml`)
 List your servers and organize them into groups (e.g., `web_servers`, `db_servers`).
+You can specify the SSH user and key here.
 
 ```yaml
 all:
   hosts:
     web_01:
       ansible_host: 192.168.1.10
+      ansible_user: ubuntu
+      ansible_ssh_private_key_file: ~/.ssh/id_rsa
   children:
     standard_servers:
       hosts:
@@ -55,7 +80,7 @@ Create a YAML file in `config_maps/` matching your group name (e.g., `standard_s
 Define the `audit_files` list to tell Sentinel-Drift which files to check.
 
 ```yaml
-# config_maps/standard_servers.yml
+# Example: config_maps/standard_servers.yml
 audit_files:
   - src: "sample_app/standard_config.conf" # Path inside source_of_truth/
     dest: "/etc/app/config.conf"           # Path on the remote server

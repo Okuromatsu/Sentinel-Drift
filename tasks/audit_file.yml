@@ -20,28 +20,36 @@
 - name: Initialize drift status
   set_fact:
     drift_detected: false
+    drift_type: "none"
 
-- name: Check for Drift
+- name: Check for Drift (Missing File)
   set_fact:
     drift_detected: true
+    drift_type: "missing"
+  when: not remote_file_stat.stat.exists
+
+- name: Check for Drift (Content Mismatch)
+  set_fact:
+    drift_detected: true
+    drift_type: "modified"
   when: 
     - remote_file_stat.stat.exists
     - local_ref_stat.stat.checksum != remote_file_stat.stat.checksum
 
 # --- DIFF SECTION ---
-- name: Fetch remote file for diff (if drift detected)
+- name: Fetch remote file for diff (if modified)
   fetch:
     src: "{{ audit_item.dest }}"
     dest: "/tmp/ansible_drift_{{ inventory_hostname }}_fetched"
     flat: yes
-  when: drift_detected
+  when: drift_detected and drift_type == 'modified'
 
 - name: Generate Diff
   delegate_to: localhost
   shell: "diff -U 0 '{{ playbook_dir }}/source_of_truth/{{ audit_item.src }}' '/tmp/ansible_drift_{{ inventory_hostname }}_fetched' | grep -vE '^(---|\\+\\+\\+|@@)' || true"
   register: diff_output
   changed_when: false
-  when: drift_detected
+  when: drift_detected and drift_type == 'modified'
 
 - name: Display Diff
   debug:
@@ -50,12 +58,17 @@
       File: {{ audit_item.dest }}
       --- DIFF OUTPUT ---
       {{ diff_output.stdout }}
-  when: drift_detected
+  when: drift_detected and drift_type == 'modified'
+
+- name: Display Missing File Warning
+  debug:
+    msg: "⚠️  FILE MISSING on {{ inventory_hostname }}: {{ audit_item.dest }}"
+  when: drift_detected and drift_type == 'missing'
 
 # --- FIX SECTION ---
 - name: Ask for confirmation to fix drift
   pause:
-    prompt: "Drift detected on {{ inventory_hostname }} for {{ audit_item.dest }}. Overwrite remote config with SoT? (y/n)"
+    prompt: "Drift detected ({{ drift_type }}) on {{ inventory_hostname }} for {{ audit_item.dest }}. Restore/Overwrite with SoT? (y/n)"
   register: prompt_result
   when: 
     - drift_detected
@@ -89,7 +102,7 @@
   lineinfile:
     path: "{{ playbook_dir }}/audit_history.log"
     create: yes
-    line: "[{{ current_date.stdout }}] [DRIFT] Host: {{ inventory_hostname }} | File: {{ audit_item.dest }} | Ref: {{ audit_item.src }}"
+    line: "[{{ current_date.stdout }}] [DRIFT] Host: {{ inventory_hostname }} | File: {{ audit_item.dest }} | Type: {{ drift_type }} | Ref: {{ audit_item.src }}"
   when: 
     - drift_detected
     - not (should_fix | default(false) | bool)
@@ -100,7 +113,7 @@
   lineinfile:
     path: "{{ playbook_dir }}/audit_history.log"
     create: yes
-    line: "[{{ current_date.stdout }}] [FIXED] Host: {{ inventory_hostname }} | File: {{ audit_item.dest }} | Ref: {{ audit_item.src }}"
+    line: "[{{ current_date.stdout }}] [FIXED] Host: {{ inventory_hostname }} | File: {{ audit_item.dest }} | Type: {{ drift_type }} | Ref: {{ audit_item.src }}"
   when: 
     - drift_detected
     - should_fix | default(false) | bool
@@ -112,18 +125,7 @@
     path: "{{ playbook_dir }}/audit_history.log"
     create: yes
     line: "[{{ current_date.stdout }}] [OK]    Host: {{ inventory_hostname }} | File: {{ audit_item.dest }}"
-  when: 
-    - remote_file_stat.stat.exists
-    - not drift_detected
-
-- name: Log Audit Result (Missing File)
-  delegate_to: localhost
-  throttle: 1
-  lineinfile:
-    path: "{{ playbook_dir }}/audit_history.log"
-    create: yes
-    line: "[{{ current_date.stdout }}] [MISS]  Host: {{ inventory_hostname }} | File: {{ audit_item.dest }} | Status: FILE NOT FOUND"
-  when: not remote_file_stat.stat.exists
+  when: not drift_detected
 
 - name: Fail run if drift detected (and not fixed)
   fail:

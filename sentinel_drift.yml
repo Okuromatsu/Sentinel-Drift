@@ -10,27 +10,6 @@
       loop: "{{ group_names }}"
       ignore_errors: true # Ignore groups that don't have a corresponding config file
 
-    - name: Safety Check for Auto-Fix
-      block:
-        - name: Warn user about Auto-Fix danger
-          pause:
-            prompt: |
-              
-              🚨 DANGER ZONE 🚨
-              You have enabled --auto-fix. This will OVERWRITE configuration files on ALL target servers.
-              Any manual changes will be lost permanently.
-              
-              Type 'yes' to confirm and proceed:
-          register: confirmation
-          run_once: true
-        
-        - name: Abort if not confirmed
-          fail:
-            msg: "Auto-fix aborted. You must type 'yes' to proceed."
-          when: confirmation.user_input != 'yes'
-          run_once: true
-      when: auto_fix | default(false) | bool
-
   roles:
     # Removed role call
 
@@ -75,3 +54,4 @@
         dest: report.html
       run_once: true
       delegate_to: localhost
+      when: generate_report | default(false) | bool

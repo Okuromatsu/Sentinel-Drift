@@ -57,12 +57,15 @@ Please refer to Ansible official documentation if you have an installation issue
 
 ### 1. Define your Inventory (`inventory.yml`)
 List your servers and organize them into groups (e.g., `web_servers`, `db_servers`).
+You can specify the SSH user and key here.
 
 ```yaml
 all:
   hosts:
     web_01:
       ansible_host: 192.168.1.10
+      ansible_user: ubuntu
+      ansible_ssh_private_key_file: ~/.ssh/id_rsa
   children:
     standard_servers:
       hosts:

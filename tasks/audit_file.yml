@@ -46,7 +46,7 @@
 - name: Display Diff
   debug:
     msg: |
-      ⚠️  DRIFT DETECTED on {{ inventory_hostname }}
+      /!\ DRIFT DETECTED on {{ inventory_hostname }} /!\
       File: {{ audit_item.dest }}
       --- DIFF OUTPUT ---
       {{ diff_output.stdout }}
@@ -123,6 +123,11 @@
     path: "{{ playbook_dir }}/audit_history.log"
     create: yes
     line: "[{{ current_date.stdout }}] [MISS]  Host: {{ inventory_hostname }} | File: {{ audit_item.dest }} | Status: FILE NOT FOUND"
+  when: not remote_file_stat.stat.exists
+
+- name: Display Missing File Warning
+  debug:
+    msg: "/!\\ FILE MISSING on {{ inventory_hostname }}: {{ audit_item.dest }} /!\\"
   when: not remote_file_stat.stat.exists
 
 - name: Fail run if drift detected (and not fixed)

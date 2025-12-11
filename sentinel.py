@@ -2,7 +2,6 @@
 import argparse
 import subprocess
 import sys
-import os
 
 def main():
     parser = argparse.ArgumentParser(
@@ -53,7 +52,7 @@ def main():
         cmd.append("--ask-vault-pass")
 
     # --- Execution ---
-    print(f"🚀 Launching Sentinel-Drift...")
+    print("🚀 Launching Sentinel-Drift...")
     try:
         # Run Ansible and stream output to console
         subprocess.run(cmd, check=True)

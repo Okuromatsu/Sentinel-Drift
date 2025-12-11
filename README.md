@@ -31,6 +31,26 @@ We kept it simple. No complex roles, just what you need.
 └── audit_history.log       # Execution logs
 ```
 
+## 📦 Dependencies
+
+Sentinel-Drift is built on **Ansible**. You don't need to install any agent on your remote servers, but you need a control machine (your laptop or a CI/CD runner) with the following requirements:
+
+*   **Ansible Core**: Version 2.9 or higher.
+*   **Python**: Version 3.8 or higher (on the control machine).
+*   **SSH Access**: The control machine must have SSH access to the target servers (using keys is recommended).
+
+To install Ansible on your control machine:
+```bash
+# MacOS (Homebrew)
+brew install ansible
+
+# Linux (Ubuntu/Debian)
+sudo apt update && sudo apt install ansible
+
+# Python (pip)
+pip install ansible
+```
+
 ## 🛠️ Usage Guide
 
 ### 1. Define your Inventory (`inventory.yml`)

@@ -4,11 +4,14 @@ all:
     web_server_01:
       ansible_host: 127.0.0.1
       ansible_connection: local
+      #ansible_ssh_private_key_file: ~/.ssh/id_rsa_web YOUR USED SSH KEY HERE FOR INDIVIDUAL HOSTS
     db_server_01:
       ansible_host: 127.0.0.1
       ansible_connection: local
   children:
     standard_servers:
+      #vars:
+      #  ansible_ssh_private_key_file: ~/.ssh/id_rsa_web YOUR USED SSH KEY HERE FOR THE WHOLE GROUP
       hosts:
         web_server_01:
     custom_servers:

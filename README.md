@@ -77,7 +77,7 @@ Create a YAML file in `config_maps/` matching your group name (e.g., `standard_s
 Define the `audit_files` list to tell Sentinel-Drift which files to check.
 
 ```yaml
-# config_maps/standard_servers.yml
+# Example: config_maps/standard_servers.yml
 audit_files:
   - src: "sample_app/standard_config.conf" # Path inside source_of_truth/
     dest: "/etc/app/config.conf"           # Path on the remote server

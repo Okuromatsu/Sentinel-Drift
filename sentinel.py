@@ -71,7 +71,7 @@ def parse_ansible_json(json_output):
             task_name = task.get('task', {}).get('name', '')
             
             # Identify tasks that report drift
-            if task_name in ["Display Diff", "Display Metadata Drift", "Display Missing File Warning", "Display Vault Error"]:
+            if task_name in ["Display Diff", "Display Metadata Drift", "Display Missing File Warning"]:
                 for host, result in task.get('hosts', {}).items():
                     if not result.get('skipped', False):
                         msg = result.get('msg', '')

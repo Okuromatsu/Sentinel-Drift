@@ -55,16 +55,26 @@
     flat: yes
   when: drift_detected and drift_type == 'modified'
 
+- name: Decrypt Source of Truth to Temp File
+  delegate_to: localhost
+  copy:
+    src: "{{ playbook_dir }}/source_of_truth/{{ audit_item.src }}"
+    dest: "/tmp/ansible_drift_sot_{{ inventory_hostname }}_decrypted"
+    mode: '0600'
+  when: drift_detected and drift_type == 'modified'
+
 - name: Generate Diff
   delegate_to: localhost
-  shell: "diff -U 0 '{{ playbook_dir }}/source_of_truth/{{ audit_item.src }}' '/tmp/ansible_drift_{{ inventory_hostname }}_fetched' | grep -vE '^(---|\\+\\+\\+|@@)' || true"
+  shell: "diff -U 0 '/tmp/ansible_drift_sot_{{ inventory_hostname }}_decrypted' '/tmp/ansible_drift_{{ inventory_hostname }}_fetched' | grep -vE '^(---|\\+\\+\\+|@@)' || true"
   register: diff_output
   changed_when: false
   when: drift_detected and drift_type == 'modified'
 
-- name: Check for Vault Error in Diff
-  set_fact:
-    is_vault_error: "{{ diff_output.stdout is search('ANSIBLE_VAULT') }}"
+- name: Cleanup Decrypted Source of Truth
+  delegate_to: localhost
+  file:
+    path: "/tmp/ansible_drift_sot_{{ inventory_hostname }}_decrypted"
+    state: absent
   when: drift_detected and drift_type == 'modified'
 
 - name: Display Diff
@@ -74,21 +84,7 @@
       File: {{ audit_item.dest }}
       --- DIFF OUTPUT ---
       {{ diff_output.stdout }}
-  when: 
-    - drift_detected 
-    - drift_type == 'modified'
-    - not (is_vault_error | default(false))
-
-- name: Display Vault Error
-  debug:
-    msg: |
-      ⚠️  VAULT ERROR on {{ inventory_hostname }}
-      File: {{ audit_item.dest }}
-      Error: Source file is encrypted but Vault password was missing or incorrect.
-  when: 
-    - drift_detected 
-    - drift_type == 'modified'
-    - is_vault_error | default(false)
+  when: drift_detected and drift_type == 'modified'
 
 - name: Display Metadata Drift
   debug:

@@ -73,9 +73,39 @@
     - drift_type in ['modified', 'missing']
     - decrypt_result.failed
 
+- name: Create Diff Parser Script
+  delegate_to: localhost
+  copy:
+    dest: "/tmp/sentinel_diff_parser.awk"
+    content: |
+      /^---/ { next }
+      /^\+\+\+/ { next }
+      /^@@/ {
+        split($0, a, " ");
+        sub("-", "", a[2]);
+        sub("\\+", "", a[3]);
+        split(a[2], old_arr, ",");
+        split(a[3], new_arr, ",");
+        old_line = old_arr[1];
+        new_line = new_arr[1];
+        next;
+      }
+      /^-/ {
+        print "-" old_line ":" substr($0, 2);
+        old_line++;
+        next;
+      }
+      /^\+/ {
+        print "+" new_line ":" substr($0, 2);
+        new_line++;
+        next;
+      }
+  run_once: true
+  changed_when: false
+
 - name: Generate Diff
   delegate_to: localhost
-  shell: "diff -U 0 '/tmp/ansible_drift_sot_{{ inventory_hostname }}_decrypted' '/tmp/ansible_drift_{{ inventory_hostname }}_fetched' | grep -vE '^(---|\\+\\+\\+|@@)' || true"
+  shell: "diff -U 0 '/tmp/ansible_drift_sot_{{ inventory_hostname }}_decrypted' '/tmp/ansible_drift_{{ inventory_hostname }}_fetched' | awk -f /tmp/sentinel_diff_parser.awk || true"
   register: diff_output
   changed_when: false
   when: drift_detected and drift_type == 'modified'

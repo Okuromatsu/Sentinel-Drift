@@ -245,50 +245,33 @@
 
     function renderDiff(container, lines) {
         var html = '<div class="diff-table">';
-        var oldLine = 0;
-        var newLine = 0;
 
         lines.forEach(function(line) {
-            // Skip file headers
-            if (line.startsWith('---') || line.startsWith('+++')) return;
-
             var rowClass = '';
             var lineNumLeft = '';
             var lineNumRight = '';
             var content = line;
 
-            // Chunk Header: @@ -1 +1 @@
-            if (line.startsWith('@@')) {
-                rowClass = 'chunk-header';
-                content = line;
-                
-                // Parse line numbers
-                var match = line.match(/@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
-                if (match) {
-                    oldLine = parseInt(match[1]) - 1;
-                    newLine = parseInt(match[2]) - 1;
-                }
-                lineNumLeft = '...';
-                lineNumRight = '...';
-            } 
-            else if (line.startsWith('-')) {
+            // Format: -10:content OR +10:content
+            if (line.startsWith('-')) {
                 rowClass = 'del';
-                oldLine++;
-                lineNumLeft = oldLine;
-                lineNumRight = '';
+                var firstColon = line.indexOf(':');
+                if (firstColon > -1) {
+                    lineNumLeft = line.substring(1, firstColon);
+                    content = line.substring(firstColon + 1);
+                }
             } 
             else if (line.startsWith('+')) {
                 rowClass = 'add';
-                newLine++;
-                lineNumLeft = '';
-                lineNumRight = newLine;
+                var firstColon = line.indexOf(':');
+                if (firstColon > -1) {
+                    lineNumRight = line.substring(1, firstColon);
+                    content = line.substring(firstColon + 1);
+                }
             } 
             else {
-                // Context line (if any)
-                oldLine++;
-                newLine++;
-                lineNumLeft = oldLine;
-                lineNumRight = newLine;
+                // Fallback for unknown lines
+                content = line;
             }
 
             html += '<div class="diff-row ' + rowClass + '">';

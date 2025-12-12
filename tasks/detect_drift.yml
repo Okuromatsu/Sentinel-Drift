@@ -1,15 +1,31 @@
 ---
-- name: Calculate hash of local reference file (SoT)
+- name: Decrypt Source of Truth for Hashing
+  delegate_to: localhost
+  copy:
+    src: "{{ playbook_dir }}/source_of_truth/{{ audit_item.src }}"
+    dest: "/tmp/ansible_drift_sot_{{ inventory_hostname }}_hash_check"
+    mode: '0600'
+    force: yes
+  register: sot_decrypt_result
+  ignore_errors: true
+
+- name: Fail if local reference file is missing or cannot be decrypted
+  fail:
+    msg: "Local reference file not found or decryption failed: {{ playbook_dir }}/source_of_truth/{{ audit_item.src }}"
+  when: sot_decrypt_result.failed
+
+- name: Calculate hash of local reference file (Decrypted)
   delegate_to: localhost
   stat:
-    path: "{{ playbook_dir }}/source_of_truth/{{ audit_item.src }}"
+    path: "/tmp/ansible_drift_sot_{{ inventory_hostname }}_hash_check"
     checksum_algorithm: sha256
   register: local_ref_stat
 
-- name: Fail if local reference file is missing
-  fail:
-    msg: "Local reference file not found: {{ playbook_dir }}/source_of_truth/{{ audit_item.src }}"
-  when: not local_ref_stat.stat.exists
+- name: Cleanup Temp Hash File
+  delegate_to: localhost
+  file:
+    path: "/tmp/ansible_drift_sot_{{ inventory_hostname }}_hash_check"
+    state: absent
 
 - name: Get hash of remote configuration file
   stat:

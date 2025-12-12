@@ -265,6 +265,7 @@ def parse_audit_log(start_time: datetime):
 
                 detail_parts = details.split(" | ")
                 for part in detail_parts:
+                    part = part.strip() # Clean up whitespace
                     if part.startswith("Host: "):
                         host = part.replace("Host: ", "")
                     elif part.startswith("File: "):

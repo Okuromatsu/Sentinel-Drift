@@ -363,9 +363,9 @@ def main():
     start_time = datetime.now()
 
     # 5. Determine Execution Mode
-    # - Interactive: ask-fix or auto-fix enabled.
-    # - Audit/Quiet: Default check mode.
-    is_interactive = args.ask_fix or args.auto_fix
+    # - Interactive: ask-fix enabled.
+    # - Audit/Quiet: Default check mode OR auto-fix (without verbose).
+    is_interactive = args.ask_fix
 
     if is_interactive or args.verbose:
         print(f"{Colors.BLUE}🚀 Launching Sentinel-Drift (Interactive Mode)...{Colors.ENDC}")
@@ -391,14 +391,18 @@ def main():
         parse_audit_log(start_time)
 
     else:
-        # Quiet Mode (Audit Only)
+        # Quiet Mode (Audit or Auto-Fix)
+        mode_msg = "Auditing infrastructure..."
+        if args.auto_fix:
+            mode_msg = "Auditing and Fixing infrastructure..."
+            
         print(f"{Colors.BLUE}🚀 Launching Sentinel-Drift...{Colors.ENDC}")
 
         # Force JSON output for parsing
         env['ANSIBLE_STDOUT_CALLBACK'] = 'json'
         env['ANSIBLE_LOAD_CALLBACK_PLUGINS'] = '1'
 
-        spinner = Spinner("Auditing infrastructure...")
+        spinner = Spinner(mode_msg)
         spinner.start()
 
         try:

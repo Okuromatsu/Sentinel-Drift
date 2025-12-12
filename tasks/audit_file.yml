@@ -62,6 +62,11 @@
   changed_when: false
   when: drift_detected and drift_type == 'modified'
 
+- name: Check for Vault Error in Diff
+  set_fact:
+    is_vault_error: "{{ diff_output.stdout is search('ANSIBLE_VAULT') }}"
+  when: drift_detected and drift_type == 'modified'
+
 - name: Display Diff
   debug:
     msg: |
@@ -69,7 +74,21 @@
       File: {{ audit_item.dest }}
       --- DIFF OUTPUT ---
       {{ diff_output.stdout }}
-  when: drift_detected and drift_type == 'modified'
+  when: 
+    - drift_detected 
+    - drift_type == 'modified'
+    - not (is_vault_error | default(false))
+
+- name: Display Vault Error
+  debug:
+    msg: |
+      ⚠️  VAULT ERROR on {{ inventory_hostname }}
+      File: {{ audit_item.dest }}
+      Error: Source file is encrypted but Vault password was missing or incorrect.
+  when: 
+    - drift_detected 
+    - drift_type == 'modified'
+    - is_vault_error | default(false)
 
 - name: Display Metadata Drift
   debug:

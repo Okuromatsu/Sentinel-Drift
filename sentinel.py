@@ -6,6 +6,9 @@ import os
 import json
 import threading
 import time
+import getpass
+import tempfile
+import atexit
 
 # --- Colors ---
 class Colors:
@@ -68,7 +71,7 @@ def parse_ansible_json(json_output):
             task_name = task.get('task', {}).get('name', '')
             
             # Identify tasks that report drift
-            if task_name in ["Display Diff", "Display Metadata Drift", "Display Missing File Warning"]:
+            if task_name in ["Display Diff", "Display Metadata Drift", "Display Missing File Warning", "Display Vault Error"]:
                 for host, result in task.get('hosts', {}).items():
                     if not result.get('skipped', False):
                         msg = result.get('msg', '')
@@ -103,13 +106,13 @@ def main():
         formatter_class=argparse.RawTextHelpFormatter
     )
 
-    parser.add_argument('--check', action='store_true', help="Run in audit mode only (default behavior).")
-    parser.add_argument('--ask-fix', action='store_true', help="Interactively ask to fix each detected drift.")
-    parser.add_argument('--auto-fix', action='store_true', help="⚠️  Automatically fix all detected drifts (DANGEROUS).")
-    parser.add_argument('--report', action='store_true', help="Generate an HTML dashboard report after execution.")
-    parser.add_argument('--inventory', '-i', default='inventory.yml', help="Path to the inventory file (default: inventory.yml).")
-    parser.add_argument('--vault-pass', action='store_true', help="Ask for Ansible Vault password.")
-    parser.add_argument('--verbose', '-v', action='store_true', help="Show full Ansible output (useful for debugging).")
+    parser.add_argument('--check', action='store_true', help="run in audit mode only (default behavior).")
+    parser.add_argument('--ask-fix', action='store_true', help="interactively ask to fix each detected drift.")
+    parser.add_argument('--auto-fix', action='store_true', help="⚠️  automatically fix all detected drifts (DANGEROUS).")
+    parser.add_argument('--report', action='store_true', help="generate an HTML dashboard report after execution.")
+    parser.add_argument('--inventory', '-i', default='inventory.yml', help="path to the inventory file (default: inventory.yml).")
+    parser.add_argument('--vault-pass', nargs='?', const='__PROMPT__', help="ansible vault password (optional argument, or prompt if omitted).")
+    parser.add_argument('--verbose', '-v', action='store_true', help="show full Ansible output (useful for debugging).")
 
     args = parser.parse_args()
 
@@ -143,11 +146,40 @@ def main():
     if extra_vars:
         cmd.extend(["-e", " ".join(extra_vars)])
 
+    # --- Vault Password Handling ---
+    vault_pass_file = None
+    vault_password_value = None
+
     if args.vault_pass:
-        cmd.append("--ask-vault-pass")
+        vault_password_value = args.vault_pass
+        if args.vault_pass == '__PROMPT__':
+            vault_password_value = getpass.getpass(f"{Colors.BLUE}Vault password: {Colors.ENDC}")
+        
+        # Create a temporary helper script (NOT containing the password)
+        # This script will just echo the environment variable SENTINEL_VAULT_PASS
+        fd, vault_pass_file = tempfile.mkstemp(suffix='.sh')
+        with os.fdopen(fd, 'w') as f:
+            f.write("#!/bin/sh\n")
+            f.write("echo \"$SENTINEL_VAULT_PASS\"\n")
+        
+        # Make it executable
+        os.chmod(vault_pass_file, 0o700)
+        
+        cmd.extend(["--vault-password-file", vault_pass_file])
+        
+        # Ensure cleanup
+        def cleanup_vault_file():
+            if vault_pass_file and os.path.exists(vault_pass_file):
+                os.remove(vault_pass_file)
+        atexit.register(cleanup_vault_file)
 
     # --- Execution ---
     
+    # Prepare Environment
+    env = os.environ.copy()
+    if vault_password_value:
+        env['SENTINEL_VAULT_PASS'] = vault_password_value
+
     # Determine mode: Interactive/Verbose vs Quiet/Pretty
     # Force verbose if ask-fix is on (need to see prompts) or if user requested verbose
     is_verbose = args.verbose or args.ask_fix
@@ -155,7 +187,7 @@ def main():
     if is_verbose:
         print(f"{Colors.BLUE}🚀 Launching Sentinel-Drift (Verbose/Interactive Mode)...{Colors.ENDC}")
         try:
-            subprocess.run(cmd, check=True)
+            subprocess.run(cmd, check=True, env=env)
         except subprocess.CalledProcessError as e:
             print(f"\n{Colors.FAIL}❌ Ansible execution failed with return code {e.returncode}{Colors.ENDC}")
             sys.exit(e.returncode)
@@ -163,7 +195,6 @@ def main():
         # Quiet Mode with Spinner and Custom Output
         print(f"{Colors.BLUE}🚀 Launching Sentinel-Drift...{Colors.ENDC}")
         
-        env = os.environ.copy()
         env['ANSIBLE_STDOUT_CALLBACK'] = 'json'
         # Disable other output callbacks that might interfere
         env['ANSIBLE_LOAD_CALLBACK_PLUGINS'] = '1'

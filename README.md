@@ -79,12 +79,7 @@ Place the "perfect" version of your configuration files in the `source_of_truth/
 Create a YAML file in `config_maps/` matching your group name (e.g., `standard_servers.yml`).
 Define the `audit_files` list to tell Sentinel-Drift which files to check.
 
-```yaml
-### 3. Map Files to Groups (`config_maps/`)
-Create a YAML file in `config_maps/` matching your group name (e.g., `standard_servers.yml`).
-Define the `audit_files` list to tell Sentinel-Drift which files to check.
-
-You can now also specify **permissions** (`mode`), **owner**, and **group**.
+You can also specify **permissions** (`mode`), **owner**, and **group**.
 
 ```yaml
 # config_maps/standard_servers.yml
@@ -100,30 +95,54 @@ audit_files:
     mode: "0600"
 ```
 
-### 4. Run the Audit
-Run the main playbook:
+### 4. Run the Tool
+
+Use the `sentinel.py` wrapper script for a better experience.
+
+**Audit Mode (Default):**
+Checks for drift and displays a summary.
 ```bash
-ansible-playbook sentinel_drift.yml
+./sentinel.py
+```
+
+**Generate HTML Report:**
+Creates a `report.html` dashboard after the audit.
+```bash
+./sentinel.py --report
+```
+
+**Interactive Fix Mode:**
+Asks you for confirmation before fixing each detected drift.
+```bash
+./sentinel.py --ask-fix
+```
+
+**Auto-Fix Mode:**
+Automatically overwrites drifted files with the Source of Truth. (Use with caution!)
+```bash
+./sentinel.py --auto-fix
+```
+
+**Using Ansible Vault:**
+If your Source of Truth contains encrypted files, provide the vault password.
+You can enter it interactively (secure prompt) or pass it as an argument.
+
+```bash
+# Interactive prompt (hides input)
+./sentinel.py --vault-pass
+
+# Pass password directly (useful for scripts)
+./sentinel.py --vault-pass "my_secret_password"
+```
+
+**Debug Mode:**
+Show full Ansible output.
+```bash
+./sentinel.py -v
 ```
 
 ### 5. View the Dashboard 📊
-After the run, open the generated `report.html` file in your browser to see the compliance dashboard.
-
-### 6. Fix the Drift
-You have two options to repair configuration drift:
-
-**Option A: Interactive Fix (Recommended)**
-Ask for confirmation before overwriting any file.
-```bash
-ansible-playbook sentinel_drift.yml -e "ask_fix=true"
-```
-
-**Option B: Auto-Fix (Use with Caution)**
-Automatically overwrite all drifted files with the Source of Truth.
-*Note: You will be prompted once at the start to confirm this dangerous action.*
-```bash
-ansible-playbook sentinel_drift.yml -e "auto_fix=true"
-```
+After the run,if you used --report, you can open the generated `report.html` file in your browser to see the compliance dashboard.
 
 ## 🔐 Handling Secrets (Ansible Vault)
 
@@ -135,39 +154,9 @@ If your configuration files contain secrets (passwords, API keys), **DO NOT** st
     ```
 2.  **Run Sentinel-Drift with the vault password:**
     ```bash
-    ansible-playbook sentinel_drift.yml --ask-vault-pass
+    ./sentinel.py --vault-pass
     ```
     Sentinel-Drift will automatically decrypt the file in memory to compare it with the remote server.
-
-## 📊 Logs
-Check `audit_history.log` for a summary of the execution:
-```
-[2023-10-27 10:00:00] [OK]    Host: web_01 | File: /etc/app/config.conf
-[2023-10-27 10:00:01] [DRIFT] Host: db_01  | File: /etc/app/config.conf | Ref: custom_config.conf
-[2023-10-27 10:05:00] [FIXED] Host: db_01  | File: /etc/app/config.conf | Ref: custom_config.conf
-```
-
-### 4. Run the Audit
-Run the main playbook:
-```bash
-ansible-playbook sentinel_drift.yml
-```
-
-### 5. Fix the Drift
-You have two options to repair configuration drift:
-
-**Option A: Interactive Fix (Recommended)**
-Ask for confirmation before overwriting any file.
-```bash
-ansible-playbook sentinel_drift.yml -e "ask_fix=true"
-```
-
-**Option B: Auto-Fix (Use with Caution)**
-Automatically overwrite all drifted files with the Source of Truth.
-*Note: You will be prompted once at the start to confirm this dangerous action.*
-```bash
-ansible-playbook sentinel_drift.yml -e "auto_fix=true"
-```
 
 ## 📊 Logs
 Check `audit_history.log` for a summary of the execution:

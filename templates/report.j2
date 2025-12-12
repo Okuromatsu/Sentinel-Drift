@@ -366,6 +366,10 @@
                             Expected: {{ file.expected_meta }}<br>
                             Found:    {{ file.found_meta }}
                         </div>
+                        {% elif file.drift_type == 'vault_error' %}
+                        <div style="padding: 10px; color: #e74c3c; font-weight: bold;">
+                            ⚠️ VAULT ERROR: Source file is encrypted but password was missing or incorrect.
+                        </div>
                         {% else %}
                         <div id="diff-container-{{ host.name }}-{{ loop.index }}"></div>
                         <script>

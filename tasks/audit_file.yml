@@ -62,6 +62,16 @@
     dest: "/tmp/ansible_drift_sot_{{ inventory_hostname }}_decrypted"
     mode: '0600'
   when: drift_detected and drift_type == 'modified'
+  ignore_errors: true
+  register: decrypt_result
+
+- name: Handle Decryption Failure
+  set_fact:
+    drift_type: "vault_error"
+  when: 
+    - drift_detected 
+    - drift_type == 'modified'
+    - decrypt_result.failed
 
 - name: Generate Diff
   delegate_to: localhost
@@ -85,6 +95,14 @@
       --- DIFF OUTPUT ---
       {{ diff_output.stdout }}
   when: drift_detected and drift_type == 'modified'
+
+- name: Display Vault Error
+  debug:
+    msg: |
+      ⚠️  VAULT ERROR on {{ inventory_hostname }}
+      File: {{ audit_item.dest }}
+      Error: Source file is encrypted but Vault password was missing or incorrect.
+  when: drift_detected and drift_type == 'vault_error'
 
 - name: Display Metadata Drift
   debug:

@@ -159,45 +159,177 @@
 
         .file-diff {
             display: none;
-            padding: 10px;
-            background: #2d2d2d;
-            color: #ccc;
-            font-family: 'Courier New', Courier, monospace;
-            white-space: pre-wrap;
+            padding: 0;
+            background: #fff;
+            border: 1px solid #ddd;
+            font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+            font-size: 12px;
             overflow-x: auto;
         }
 
-        .diff-add { color: #2ecc71; }
-        .diff-del { color: #e74c3c; }
-        .diff-meta { color: #f1c40f; }
+        .diff-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
 
-        /* Toggle Logic */
-        .active { display: block; }
-        .rotate { transform: rotate(90deg); }
-        .arrow { transition: transform 0.3s; }
+        .diff-row {
+            display: flex;
+        }
 
-    </style>
-</head>
-<body>
+        .diff-num {
+            width: 40px;
+            min-width: 40px;
+            padding: 2px 5px;
+            text-align: right;
+            color: #bbb;
+            background-color: #f7f7f7;
+            border-right: 1px solid #eee;
+            user-select: none;
+        }
 
-<div class="container">
-    <h1>🛡️ Sentinel-Drift Report</h1>
-    <p style="text-align: center;">Generated on: {{ ansible_date_time.date }} {{ ansible_date_time.time }}</p>
+        .diff-content {
+            flex: 1;
+            padding: 2px 10px;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
 
-    <div class="dashboard">
-        <div class="chart-container">
-            <h3>Compliance Overview</h3>
-            <div class="donut-chart">
-                <div class="donut-hole">
-                    <span>{{ stats.total }}</span>
-                    <small>Servers</small>
+        /* GitHub-like styling */
+        .diff-row.add {
+            background-color: #e6ffed;
+        }
+        .diff-row.add .diff-content {
+            color: #22863a;
+        }
+        .diff-row.add .diff-num {
+            background-color: #cdffd8;
+            color: #22863a;
+            border-right-color: #bef5cb;
+        }
+
+        .diff-row.del {
+            background-color: #ffeef0;
+        }
+        .diff-row.del .diff-content {
+            color: #b31d28;
+        }
+        .diff-row.del .diff-num {
+            background-color: #ffdce0;
+            color: #b31d28;
+            border-right-color: #fdaeb7;
+        }
+
+        .diff-row.chunk-header {
+                    {% if file.drift %}
+                    <div id="file-{{ host.name }}-{{ loop.index }}" class="file-diff">
+                        {% if file.drift_type == 'missing' %}
+                        <div style="padding: 10px; color: #e74c3c; font-weight: bold;">FILE MISSING ON REMOTE SERVER</div>
+                        {% elif file.drift_type == 'metadata' %}
+                        <div style="padding: 10px;">
+                            <span style="color: #f39c12; font-weight: bold;">METADATA DRIFT:</span><br>
+                            Expected: {{ file.expected_meta }}<br>
+                            Found:    {{ file.found_meta }}
+                        </div>
+                        {% else %}
+                        <div id="diff-container-{{ host.name }}-{{ loop.index }}"></div>
+                        <script>
+                            (function() {
+                                var diffLines = {{ file.diff_lines | tojson }};
+                                var container = document.getElementById('diff-container-{{ host.name }}-{{ loop.index }}');
+                                renderDiff(container, diffLines);
+                            })();
+                        </script>
+                        {% endif %}
+                    </div>
+                    {% endif %}
                 </div>
+                {% endfor %}
             </div>
-            <div class="legend">
-                <div class="legend-item"><div class="color-box" style="background: var(--success-color)"></div> Fully Compliant ({{ stats.compliant }})</div>
-                <div class="legend-item"><div class="color-box" style="background: var(--warning-color)"></div> Partially Compliant ({{ stats.partial }})</div>
-                <div class="legend-item"><div class="color-box" style="background: var(--danger-color)"></div> Non-Compliant ({{ stats.non_compliant }})</div>
-            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+    function toggle(id) {
+        var element = document.getElementById(id);
+        if (element.style.display === "block") {
+            element.style.display = "none";
+        } else {
+            element.style.display = "block";
+        }
+    }
+
+    function renderDiff(container, lines) {
+        var html = '<div class="diff-table">';
+        var oldLine = 0;
+        var newLine = 0;
+
+        lines.forEach(function(line) {
+            // Skip file headers
+            if (line.startsWith('---') || line.startsWith('+++')) return;
+
+            var rowClass = '';
+            var lineNumLeft = '';
+            var lineNumRight = '';
+            var content = line;
+
+            // Chunk Header: @@ -1 +1 @@
+            if (line.startsWith('@@')) {
+                rowClass = 'chunk-header';
+                content = line;
+                
+                // Parse line numbers
+                var match = line.match(/@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
+                if (match) {
+                    oldLine = parseInt(match[1]) - 1;
+                    newLine = parseInt(match[2]) - 1;
+                }
+                lineNumLeft = '...';
+                lineNumRight = '...';
+            } 
+            else if (line.startsWith('-')) {
+                rowClass = 'del';
+                oldLine++;
+                lineNumLeft = oldLine;
+                lineNumRight = '';
+            } 
+            else if (line.startsWith('+')) {
+                rowClass = 'add';
+                newLine++;
+                lineNumLeft = '';
+                lineNumRight = newLine;
+            } 
+            else {
+                // Context line (if any)
+                oldLine++;
+                newLine++;
+                lineNumLeft = oldLine;
+                lineNumRight = newLine;
+            }
+
+            html += '<div class="diff-row ' + rowClass + '">';
+            html += '<div class="diff-num">' + lineNumLeft + '</div>';
+            html += '<div class="diff-num">' + lineNumRight + '</div>';
+            html += '<div class="diff-content">' + escapeHtml(content) + '</div>';
+            html += '</div>';
+        });
+
+        html += '</div>';
+        container.innerHTML = html;
+    }
+
+    function escapeHtml(text) {
+        var map = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        };
+        return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+    }
+</script>   </div>
         </div>
     </div>
 

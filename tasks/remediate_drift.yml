@@ -38,6 +38,7 @@
     owner: "{{ audit_item.owner | default(omit) }}"
     group: "{{ audit_item.group | default(omit) }}"
     force: yes
+  register: copy_result
   when: 
     - drift_detected
     - should_fix | default(false) | bool
@@ -49,11 +50,21 @@
     mode: "{{ audit_item.mode | default(omit) }}"
     owner: "{{ audit_item.owner | default(omit) }}"
     group: "{{ audit_item.group | default(omit) }}"
+  register: file_result
   when: 
     - drift_detected
     - should_fix | default(false) | bool
     - drift_type == 'metadata'
     - remote_file_stat.stat.exists
+
+- name: Correct Drift Status (False Positive Check)
+  set_fact:
+    drift_detected: false
+  when:
+    - drift_detected
+    - should_fix | default(false) | bool
+    - not (copy_result.changed | default(false))
+    - not (file_result.changed | default(false))
 
 - name: Display Fix Applied
   debug:

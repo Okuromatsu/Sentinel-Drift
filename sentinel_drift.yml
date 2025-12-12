@@ -10,34 +10,48 @@
       loop: "{{ group_names }}"
       ignore_errors: true # Ignore groups that don't have a corresponding config file
 
-    - name: Safety Check for Auto-Fix
-      block:
-        - name: Warn user about Auto-Fix danger
-          pause:
-            prompt: |
-              
-              🚨 DANGER ZONE 🚨
-              You have enabled --auto-fix. This will OVERWRITE configuration files on ALL target servers.
-              Any manual changes will be lost permanently.
-              
-              Type 'yes' to confirm and proceed:
-          register: confirmation
-          run_once: true
-        
-        - name: Abort if not confirmed
-          fail:
-            msg: "Auto-fix aborted. You must type 'yes' to proceed."
-          when: confirmation.user_input != 'yes'
-          run_once: true
-      when: auto_fix | default(false) | bool
-
   roles:
     # Removed role call
 
   tasks:
+    - name: Initialize Host Results
+      set_fact:
+        host_audit_results: []
+
     - name: Audit all defined configuration files
       include_tasks: tasks/audit_file.yml
       loop: "{{ audit_files }}"
       loop_control:
         loop_var: audit_item
       when: audit_files is defined
+
+  post_tasks:
+    - name: Aggregate Report Data
+      set_fact:
+        report_data: "{{ report_data | default([]) + [{'name': inventory_hostname, 'files': host_audit_results, 'status': 'ok' if (host_audit_results | selectattr('drift', 'equalto', true) | list | length == 0) else ('fail' if (host_audit_results | selectattr('drift', 'equalto', false) | list | length == 0) else 'partial') }] }}"
+      run_once: true
+      delegate_to: localhost
+      loop: "{{ ansible_play_hosts }}"
+      loop_control:
+        loop_var: item
+      vars:
+        inventory_hostname: "{{ item }}"
+        host_audit_results: "{{ hostvars[item]['host_audit_results'] | default([]) }}"
+
+    - name: Calculate Statistics
+      set_fact:
+        stats:
+          total: "{{ report_data | length }}"
+          compliant: "{{ report_data | selectattr('status', 'equalto', 'ok') | list | length }}"
+          partial: "{{ report_data | selectattr('status', 'equalto', 'partial') | list | length }}"
+          non_compliant: "{{ report_data | selectattr('status', 'equalto', 'fail') | list | length }}"
+      run_once: true
+      delegate_to: localhost
+
+    - name: Generate HTML Report
+      template:
+        src: templates/report.j2
+        dest: report.html
+      run_once: true
+      delegate_to: localhost
+      when: generate_report | default(false) | bool

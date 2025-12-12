@@ -1,0 +1,69 @@
+---
+- name: Fetch remote file for diff (if modified)
+  fetch:
+    src: "{{ audit_item.dest }}"
+    dest: "/tmp/ansible_drift_{{ inventory_hostname }}_fetched"
+    flat: yes
+  when: drift_detected and drift_type == 'modified'
+
+- name: Decrypt Source of Truth to Temp File
+  delegate_to: localhost
+  copy:
+    src: "{{ playbook_dir }}/source_of_truth/{{ audit_item.src }}"
+    dest: "/tmp/ansible_drift_sot_{{ inventory_hostname }}_decrypted"
+    mode: '0600'
+  when: drift_detected and drift_type in ['modified', 'missing']
+  ignore_errors: true
+  register: decrypt_result
+
+- name: Handle Decryption Failure
+  set_fact:
+    drift_type: "vault_error"
+  when: 
+    - drift_detected 
+    - drift_type in ['modified', 'missing']
+    - decrypt_result.failed
+
+- name: Create Diff Parser Script
+  delegate_to: localhost
+  copy:
+    dest: "/tmp/sentinel_diff_parser.awk"
+    content: |
+      /^---/ { next }
+      /^\+\+\+/ { next }
+      /^@@/ {
+        split($0, a, " ");
+        sub("-", "", a[2]);
+        sub("\\+", "", a[3]);
+        split(a[2], old_arr, ",");
+        split(a[3], new_arr, ",");
+        old_line = old_arr[1];
+        new_line = new_arr[1];
+        next;
+      }
+      /^-/ {
+        print "-" old_line ":" substr($0, 2);
+        old_line++;
+        next;
+      }
+      /^\+/ {
+        print "+" new_line ":" substr($0, 2);
+        new_line++;
+        next;
+      }
+  run_once: true
+  changed_when: false
+
+- name: Generate Diff
+  delegate_to: localhost
+  shell: "diff -U 0 '/tmp/ansible_drift_sot_{{ inventory_hostname }}_decrypted' '/tmp/ansible_drift_{{ inventory_hostname }}_fetched' | awk -f /tmp/sentinel_diff_parser.awk || true"
+  register: diff_output
+  changed_when: false
+  when: drift_detected and drift_type == 'modified'
+
+- name: Cleanup Decrypted Source of Truth
+  delegate_to: localhost
+  file:
+    path: "/tmp/ansible_drift_sot_{{ inventory_hostname }}_decrypted"
+    state: absent
+  when: drift_detected and drift_type in ['modified', 'missing']

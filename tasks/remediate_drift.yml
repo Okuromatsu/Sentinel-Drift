@@ -1,0 +1,75 @@
+---
+- name: Ask for confirmation to fix drift
+  pause:
+    prompt: |
+      
+      -------------------------------------------------------------------------------
+      ⚠️  DRIFT DETECTED on {{ inventory_hostname }}
+      📄 File: {{ audit_item.dest }}
+      🔍 Type: {{ drift_type }}
+      -------------------------------------------------------------------------------
+      {% if drift_type == 'modified' and diff_output.stdout is defined %}
+      {{ diff_output.stdout }}
+      {% elif drift_type == 'metadata' %}
+      Expected: Mode={{ audit_item.mode | default('ANY') }}, Owner={{ audit_item.owner | default('ANY') }}, Group={{ audit_item.group | default('ANY') }}
+      Found:    Mode={{ remote_file_stat.stat.mode }}, Owner={{ remote_file_stat.stat.pw_name }}, Group={{ remote_file_stat.stat.gr_name }}
+      {% endif %}
+      -------------------------------------------------------------------------------
+      ❓ Restore/Overwrite with SoT? (y/n)
+  register: prompt_result
+  when: 
+    - drift_detected
+    - ask_fix | default(false) | bool
+    - not (auto_fix | default(false) | bool)
+    - drift_type != 'vault_error'
+
+- name: Determine if fix should be applied
+  set_fact:
+    should_fix: "{{ (auto_fix | default(false) | bool) or (prompt_result.user_input | default('n') | trim | lower == 'y') }}"
+  when: 
+    - drift_detected
+    - drift_type != 'vault_error'
+
+- name: Apply Source of Truth (Fix Drift - Content or Missing)
+  copy:
+    src: "{{ playbook_dir }}/source_of_truth/{{ audit_item.src }}"
+    dest: "{{ audit_item.dest }}"
+    mode: "{{ audit_item.mode | default(omit) }}"
+    owner: "{{ audit_item.owner | default(omit) }}"
+    group: "{{ audit_item.group | default(omit) }}"
+    force: yes
+  register: copy_result
+  when: 
+    - drift_detected
+    - should_fix | default(false) | bool
+    - drift_type in ['modified', 'missing']
+
+- name: Apply Source of Truth (Fix Drift - Metadata Only)
+  file:
+    path: "{{ audit_item.dest }}"
+    mode: "{{ audit_item.mode | default(omit) }}"
+    owner: "{{ audit_item.owner | default(omit) }}"
+    group: "{{ audit_item.group | default(omit) }}"
+  register: file_result
+  when: 
+    - drift_detected
+    - should_fix | default(false) | bool
+    - drift_type == 'metadata'
+    - remote_file_stat.stat.exists
+
+- name: Correct Drift Status (False Positive Check)
+  set_fact:
+    drift_detected: false
+  when:
+    - drift_detected
+    - should_fix | default(false) | bool
+    - not (copy_result.changed | default(false))
+    - not (file_result.changed | default(false))
+
+- name: Display Fix Applied
+  debug:
+    msg: "✅ FIXED: {{ audit_item.dest }}"
+  when: 
+    - drift_detected
+    - should_fix | default(false) | bool
+    - drift_type != 'vault_error'

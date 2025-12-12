@@ -106,24 +106,35 @@ def main():
         formatter_class=argparse.RawTextHelpFormatter
     )
 
-    parser.add_argument('--check', action='store_true', help="run in audit mode only (default behavior).")
-    parser.add_argument('--ask-fix', action='store_true', help="interactively ask to fix each detected drift.")
-    parser.add_argument('--auto-fix', action='store_true', help="⚠️  automatically fix all detected drifts (DANGEROUS).")
-    parser.add_argument('--report', action='store_true', help="generate an HTML dashboard report after execution.")
-    parser.add_argument('--inventory', '-i', default='inventory.yml', help="path to the inventory file (default: inventory.yml).")
-    parser.add_argument('--vault-pass', nargs='?', const='__PROMPT__', help="ansible vault password (optional argument, or prompt if omitted).")
-    parser.add_argument('--verbose', '-v', action='store_true', help="show full Ansible output (useful for debugging).")
+    parser.add_argument('--check', action='store_true', help="un in audit mode only (default behavior).")
+    parser.add_argument('--ask-fix', action='store_true', help="Interactively ask to fix each detected drift.")
+    parser.add_argument('--auto-fix', nargs='?', const='prompt', help="⚠️  Automatically fix all detected drifts (DANGEROUS). Pass 'yes' to skip confirmation.")
+    parser.add_argument('--report', nargs='?', const='prompt', help="Generate an HTML dashboard report after execution. Pass 'yes' to skip vault warning.")
+    parser.add_argument('--inventory', '-i', default='inventory.yml', help="Path to the inventory file (default: inventory.yml).")
+    parser.add_argument('--vault-pass', nargs='?', const='__PROMPT__', help="Ansible Vault password (optional argument, or prompt if omitted).")
+    parser.add_argument('--verbose', '-v', action='store_true', help="Show full Ansible output (useful for debugging).")
 
     args = parser.parse_args()
 
     # --- Safety Checks ---
     if args.auto_fix:
         print(f"\n{Colors.FAIL}🚨  DANGER ZONE: AUTO-FIX ENABLED  🚨{Colors.ENDC}")
-        print("You are about to overwrite configuration files on remote servers without confirmation.")
-        response = input(f"{Colors.WARNING}Type 'yes' to confirm and proceed: {Colors.ENDC}")
-        if response.strip() != 'yes':
-            print(f"{Colors.FAIL}❌ Aborted by user.{Colors.ENDC}")
-            sys.exit(1)
+        if args.auto_fix != 'yes':
+            print("You are about to overwrite configuration files on remote servers without confirmation.")
+            response = input(f"{Colors.WARNING}Type 'yes' to confirm and proceed: {Colors.ENDC}")
+            if response.strip() != 'yes':
+                print(f"{Colors.FAIL}❌ Aborted by user.{Colors.ENDC}")
+                sys.exit(1)
+
+    if args.report and args.vault_pass:
+        print(f"\n{Colors.WARNING}⚠️  SECURITY WARNING: POTENTIAL SECRET LEAK  ⚠️{Colors.ENDC}")
+        print("You are generating a report containing diffs of encrypted files.")
+        print("Secrets will appear IN PLAIN TEXT in 'report.html'.")
+        if args.report != 'yes':
+            response = input(f"{Colors.WARNING}Type 'yes' to confirm you understand the risk: {Colors.ENDC}")
+            if response.strip() != 'yes':
+                print(f"{Colors.FAIL}❌ Aborted by user.{Colors.ENDC}")
+                sys.exit(1)
 
     # --- Build Ansible Command ---
     cmd = [

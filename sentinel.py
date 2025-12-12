@@ -221,9 +221,9 @@ def parse_ansible_json(json_output: str):
 
         # If we have fixes, show them
         if fixes:
-            print(f"{Colors.BLUE}🔧 {host}: FIXED{Colors.ENDC}")
+            print(f"{Colors.GREEN}🔧 {host}: FIXED{Colors.ENDC}")
             for msg in fixes:
-                print(f"    {msg}")
+                print(f"{Colors.GREEN}    {msg}{Colors.ENDC}")
         
         # Filter out drifts that were fixed
         fixed_files = []

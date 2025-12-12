@@ -40,6 +40,9 @@ DRIFT_TASKS = [
     "Display Missing File Warning",
     "Display Vault Error"
 ]
+FIX_TASKS = [
+    "Display Fix Applied"
+]
 
 
 class Colors:
@@ -180,6 +183,7 @@ def parse_ansible_json(json_output: str):
 
     # Initialize drift tracking
     host_drifts: Dict[str, List[str]] = {host: [] for host in stats.keys()}
+    host_fixes: Dict[str, List[str]] = {host: [] for host in stats.keys()}
 
     # Iterate through plays and tasks to find specific drift messages
     for play in plays:
@@ -191,6 +195,12 @@ def parse_ansible_json(json_output: str):
                     if not result.get('skipped', False):
                         msg = result.get('msg', '')
                         host_drifts[host].append(msg)
+            
+            elif task_name in FIX_TASKS:
+                for host, result in task.get('hosts', {}).items():
+                    if not result.get('skipped', False):
+                        msg = result.get('msg', '')
+                        host_fixes[host].append(msg)
 
     # Display Final Summary
     for host, stat in stats.items():
@@ -203,16 +213,45 @@ def parse_ansible_json(json_output: str):
             continue
 
         drifts = host_drifts.get(host, [])
+        fixes = host_fixes.get(host, [])
 
-        if not drifts:
+        if not drifts and not fixes:
             print(f"{Colors.GREEN}✅ {host}: OK (Compliant){Colors.ENDC}")
-        else:
+            continue
+
+        # If we have fixes, show them
+        if fixes:
+            print(f"{Colors.BLUE}🔧 {host}: FIXED{Colors.ENDC}")
+            for msg in fixes:
+                print(f"    {msg}")
+        
+        # Filter out drifts that were fixed
+        fixed_files = []
+        for fmsg in fixes:
+            # msg is "✅ FIXED: /path/to/file"
+            if "FIXED: " in fmsg:
+                fixed_files.append(fmsg.split("FIXED: ")[1].strip())
+        
+        remaining_drifts = []
+        for dmsg in drifts:
+            # Check if this drift message relates to a fixed file
+            is_fixed = False
+            for ffile in fixed_files:
+                if ffile in dmsg:
+                    is_fixed = True
+                    break
+            if not is_fixed:
+                remaining_drifts.append(dmsg)
+
+        if remaining_drifts:
             print(f"{Colors.FAIL}⚠️  {host}: DRIFT DETECTED{Colors.ENDC}")
-            for msg in drifts:
+            for msg in remaining_drifts:
                 # Indent the message for better readability
                 formatted_msg = "\n".join([f"    {line}" for line in msg.splitlines()])
                 print(f"{Colors.WARNING}{formatted_msg}{Colors.ENDC}")
             print("")  # Empty line separator
+        elif fixes:
+            print("") # Empty line separator if only fixes shown
 
 
 def parse_audit_log(start_time: datetime):

@@ -53,3 +53,11 @@
     - should_fix | default(false) | bool
     - drift_type == 'metadata'
     - remote_file_stat.stat.exists
+
+- name: Display Fix Applied
+  debug:
+    msg: "✅ FIXED: {{ audit_item.dest }}"
+  when: 
+    - drift_detected
+    - should_fix | default(false) | bool
+    - drift_type != 'vault_error'

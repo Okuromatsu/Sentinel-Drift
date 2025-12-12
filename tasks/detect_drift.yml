@@ -1,0 +1,48 @@
+---
+- name: Calculate hash of local reference file (SoT)
+  delegate_to: localhost
+  stat:
+    path: "{{ playbook_dir }}/source_of_truth/{{ audit_item.src }}"
+    checksum_algorithm: sha256
+  register: local_ref_stat
+
+- name: Fail if local reference file is missing
+  fail:
+    msg: "Local reference file not found: {{ playbook_dir }}/source_of_truth/{{ audit_item.src }}"
+  when: not local_ref_stat.stat.exists
+
+- name: Get hash of remote configuration file
+  stat:
+    path: "{{ audit_item.dest }}"
+    checksum_algorithm: sha256
+  register: remote_file_stat
+
+- name: Initialize drift status
+  set_fact:
+    drift_detected: false
+    drift_type: "none"
+
+- name: Check for Drift (Missing File)
+  set_fact:
+    drift_detected: true
+    drift_type: "missing"
+  when: not remote_file_stat.stat.exists
+
+- name: Check for Drift (Content Mismatch)
+  set_fact:
+    drift_detected: true
+    drift_type: "modified"
+  when: 
+    - remote_file_stat.stat.exists
+    - local_ref_stat.stat.checksum != remote_file_stat.stat.checksum
+
+- name: Check for Drift (Metadata Mismatch)
+  set_fact:
+    drift_detected: true
+    drift_type: "metadata"
+  when: 
+    - remote_file_stat.stat.exists
+    - (audit_item.mode is defined and remote_file_stat.stat.mode != audit_item.mode) or
+      (audit_item.owner is defined and remote_file_stat.stat.pw_name != audit_item.owner) or
+      (audit_item.group is defined and remote_file_stat.stat.gr_name != audit_item.group)
+    - drift_type == "none" # Content drift takes precedence

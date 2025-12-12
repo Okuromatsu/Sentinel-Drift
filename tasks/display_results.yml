@@ -1,0 +1,31 @@
+---
+- name: Display Diff
+  debug:
+    msg: |
+      ⚠️  DRIFT DETECTED on {{ inventory_hostname }}
+      File: {{ audit_item.dest }}
+      --- DIFF OUTPUT ---
+      {{ diff_output.stdout }}
+  when: drift_detected and drift_type == 'modified'
+
+- name: Display Vault Error
+  debug:
+    msg: |
+      ⚠️  VAULT ERROR on {{ inventory_hostname }}
+      File: {{ audit_item.dest }}
+      Error: Source file is encrypted but Vault password was missing or incorrect.
+  when: drift_detected and drift_type == 'vault_error'
+
+- name: Display Metadata Drift
+  debug:
+    msg: |
+      ⚠️  METADATA DRIFT on {{ inventory_hostname }}
+      File: {{ audit_item.dest }}
+      Expected: Mode={{ audit_item.mode | default('ANY') }}, Owner={{ audit_item.owner | default('ANY') }}, Group={{ audit_item.group | default('ANY') }}
+      Found:    Mode={{ remote_file_stat.stat.mode }}, Owner={{ remote_file_stat.stat.pw_name }}, Group={{ remote_file_stat.stat.gr_name }}
+  when: drift_detected and drift_type == 'metadata'
+
+- name: Display Missing File Warning
+  debug:
+    msg: "⚠️  FILE MISSING on {{ inventory_hostname }}: {{ audit_item.dest }}"
+  when: drift_detected and drift_type == 'missing'

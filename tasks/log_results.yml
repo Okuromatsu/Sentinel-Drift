@@ -1,0 +1,55 @@
+---
+- name: Get current timestamp
+  delegate_to: localhost
+  command: date "+%Y-%m-%d %H:%M:%S"
+  register: current_date
+  changed_when: false
+  run_once: true
+
+- name: Log Audit Result (Drift Detected - Not Fixed)
+  delegate_to: localhost
+  throttle: 1
+  lineinfile:
+    path: "{{ playbook_dir }}/audit_history.log"
+    create: yes
+    line: "[{{ current_date.stdout }}] [DRIFT] Host: {{ inventory_hostname }} | File: {{ audit_item.dest }} | Type: {{ drift_type }} | Ref: {{ audit_item.src }}"
+  changed_when: false
+  when: 
+    - drift_detected
+    - not (should_fix | default(false) | bool)
+
+- name: Log Audit Result (Drift Fixed)
+  delegate_to: localhost
+  throttle: 1
+  lineinfile:
+    path: "{{ playbook_dir }}/audit_history.log"
+    create: yes
+    line: "[{{ current_date.stdout }}] [FIXED] Host: {{ inventory_hostname }} | File: {{ audit_item.dest }} | Type: {{ drift_type }} | Ref: {{ audit_item.src }}"
+  changed_when: false
+  when: 
+    - drift_detected
+    - should_fix | default(false) | bool
+
+- name: Log Audit Result (Success)
+  delegate_to: localhost
+  throttle: 1
+  lineinfile:
+    path: "{{ playbook_dir }}/audit_history.log"
+    create: yes
+    line: "[{{ current_date.stdout }}] [OK]    Host: {{ inventory_hostname }} | File: {{ audit_item.dest }}"
+  changed_when: false
+  when: not drift_detected
+
+- name: Register Audit Result for Report
+  set_fact:
+    current_file_result:
+      path: "{{ audit_item.dest }}"
+      drift: "{{ drift_detected }}"
+      drift_type: "{{ drift_type }}"
+      diff_lines: "{{ diff_output.stdout_lines | default([]) }}"
+      expected_meta: "Mode={{ audit_item.mode | default('ANY') }}, Owner={{ audit_item.owner | default('ANY') }}, Group={{ audit_item.group | default('ANY') }}"
+      found_meta: "Mode={{ remote_file_stat.stat.mode | default('N/A') }}, Owner={{ remote_file_stat.stat.pw_name | default('N/A') }}, Group={{ remote_file_stat.stat.gr_name | default('N/A') }}"
+
+- name: Append to Host Results
+  set_fact:
+    host_audit_results: "{{ host_audit_results | default([]) + [current_file_result] }}"

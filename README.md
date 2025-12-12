@@ -5,30 +5,37 @@
 ## 🚀 Features
 
 *   **Source of Truth**: Define your desired configuration states in the `source_of_truth/` folder.
-*   **Drift Detection**: Calculates SHA-256 hashes to verify integrity.
+*   **Drift Detection**: Calculates SHA-256 hashes to verify integrity (Content & Metadata).
 *   **Smart Diff**: Displays a clean, readable `diff` output showing exactly what changed.
 *   **Multi-File Support**: Audit multiple configuration files per server.
+*   **Modular Architecture**: Logic is split into specialized task files for better maintainability.
+*   **Secure Vault Integration**: Handles encrypted Source of Truth files with in-memory decryption (no secrets on disk).
 *   **Auto-Fix / Ask-Fix**: Automatically repair drift or ask for confirmation before overwriting.
+*   **Robust CLI**: Python wrapper (`sentinel.py`) with safety checks, summary reporting, and interactive modes.
 *   **Audit Logging**: Keeps a history of all audit runs in `audit_history.log`.
 
 ## 📂 Project Structure
 
-We kept it simple. No complex roles, just what you need.
+We use a modular architecture orchestrated by a Python wrapper.
 
 ```
 .
-├── sentinel_drift.yml      # The main playbook to run
-├── inventory.yml           # Define your servers and groups here
-├── config_maps/            # Map groups to config files here
+├── sentinel.py             # 🧠 CLI Wrapper & Entry Point
+├── sentinel_drift.yml      # 📜 Main Playbook
+├── inventory.yml           # 🗺️ Server Inventory
+├── config_maps/            # 📍 Host-to-File Mappings
 │   ├── standard_servers.yml
-│   └── custom_servers.yml
-├── source_of_truth/        # PUT YOUR REFERENCE CONFIG FILES HERE
-│   └── sample_app/
-│       ├── standard_config.conf
-│       └── custom_config.conf
-├── tasks/
-│   └── audit_file.yml      # The logic (Hash, Compare, Diff, Log)
-└── audit_history.log       # Execution logs
+│   └── ...
+├── source_of_truth/        # 💎 Reference Config Files (SoT)
+│   └── ...
+├── tasks/                  # 🧩 Modular Ansible Tasks
+│   ├── audit_file.yml      # Orchestrator
+│   ├── detect_drift.yml    # Logic: Hash & Metadata Check
+│   ├── generate_diff.yml   # Logic: Diff Generation
+│   ├── display_results.yml # Logic: Console Output
+│   ├── remediate_drift.yml # Logic: Auto-Fix / Ask-Fix
+│   └── log_results.yml     # Logic: History Logging
+└── audit_history.log       # 📝 Execution Logs
 ```
 
 ## 📦 Dependencies

@@ -2,6 +2,15 @@
 # Main Audit Task File
 # This file orchestrates the audit process by including specialized task files.
 
+- name: Reset Loop Variables
+  set_fact:
+    drift_detected: false
+    drift_type: "none"
+    should_fix: false
+    local_ref_stat: {}
+    remote_file_stat: {}
+    diff_output: {}
+
 - name: Detect Drift
   include_tasks: tasks/detect_drift.yml
 

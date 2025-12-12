@@ -37,6 +37,7 @@
     mode: "{{ audit_item.mode | default(omit) }}"
     owner: "{{ audit_item.owner | default(omit) }}"
     group: "{{ audit_item.group | default(omit) }}"
+    force: yes
   when: 
     - drift_detected
     - should_fix | default(false) | bool

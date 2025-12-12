@@ -220,6 +220,62 @@
         }
 
         .diff-row.chunk-header {
+            background-color: #f1f8ff;
+            color: #0366d6;
+        }
+        .diff-row.chunk-header .diff-content {
+            font-weight: bold;
+        }
+
+        /* Toggle Logic */
+        .active { display: block; }
+        .rotate { transform: rotate(90deg); }
+        .arrow { transition: transform 0.3s; }
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🛡️ Sentinel-Drift Report</h1>
+    <p style="text-align: center;">Generated on: {{ ansible_date_time.date }} {{ ansible_date_time.time }}</p>
+
+    <div class="dashboard">
+        <div class="chart-container">
+            <h3>Compliance Overview</h3>
+            <div class="donut-chart">
+                <div class="donut-hole">
+                    <span>{{ stats.total }}</span>
+                    <small>Servers</small>
+                </div>
+            </div>
+            <div class="legend">
+                <div class="legend-item"><div class="color-box" style="background: var(--success-color)"></div> Fully Compliant ({{ stats.compliant }})</div>
+                <div class="legend-item"><div class="color-box" style="background: var(--warning-color)"></div> Partially Compliant ({{ stats.partial }})</div>
+                <div class="legend-item"><div class="color-box" style="background: var(--danger-color)"></div> Non-Compliant ({{ stats.non_compliant }})</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="server-list">
+        {% for host in report_data %}
+        <div class="server-item">
+            <div class="server-header status-{{ host.status }}" onclick="toggle('server-{{ loop.index }}')">
+                <span><strong>{{ host.name }}</strong></span>
+                <span>
+                    {% if host.status == 'ok' %}✅ Compliant
+                    {% elif host.status == 'partial' %}⚠️ Partial
+                    {% else %}❌ Failed{% endif %}
+                    <span class="arrow">▶</span>
+                </span>
+            </div>
+            <div id="server-{{ loop.index }}" class="server-details">
+                {% for file in host.files %}
+                <div class="file-item">
+                    <div class="file-header {% if file.drift %}drift{% else %}ok{% endif %}" {% if file.drift %}onclick="toggle('file-{{ host.name }}-{{ loop.index }}')"{% endif %}>
+                        <span>{{ file.path }}</span>
+                        <span>{% if file.drift %}DRIFT DETECTED ({{ file.drift_type }}) 🔽{% else %}OK ✅{% endif %}</span>
+                    </div>
                     {% if file.drift %}
                     <div id="file-{{ host.name }}-{{ loop.index }}" class="file-diff">
                         {% if file.drift_type == 'missing' %}
@@ -328,62 +384,6 @@
             "'": '&#039;'
         };
         return text.replace(/[&<>"']/g, function(m) { return map[m]; });
-    }
-</script>   </div>
-        </div>
-    </div>
-
-    <div class="server-list">
-        {% for host in report_data %}
-        <div class="server-item">
-            <div class="server-header status-{{ host.status }}" onclick="toggle('server-{{ loop.index }}')">
-                <span><strong>{{ host.name }}</strong></span>
-                <span>
-                    {% if host.status == 'ok' %}✅ Compliant
-                    {% elif host.status == 'partial' %}⚠️ Partial
-                    {% else %}❌ Failed{% endif %}
-                    <span class="arrow">▶</span>
-                </span>
-            </div>
-            <div id="server-{{ loop.index }}" class="server-details">
-                {% for file in host.files %}
-                <div class="file-item">
-                    <div class="file-header {% if file.drift %}drift{% else %}ok{% endif %}" {% if file.drift %}onclick="toggle('file-{{ host.name }}-{{ loop.index }}')"{% endif %}>
-                        <span>{{ file.path }}</span>
-                        <span>{% if file.drift %}DRIFT DETECTED ({{ file.drift_type }}) 🔽{% else %}OK ✅{% endif %}</span>
-                    </div>
-                    {% if file.drift %}
-                    <div id="file-{{ host.name }}-{{ loop.index }}" class="file-diff">
-                        {% if file.drift_type == 'missing' %}
-                        <span class="diff-del">FILE MISSING ON REMOTE SERVER</span>
-                        {% elif file.drift_type == 'metadata' %}
-                        <span class="diff-meta">METADATA DRIFT:</span>
-                        Expected: {{ file.expected_meta }}
-                        Found:    {{ file.found_meta }}
-                        {% else %}
-                        {% for line in file.diff_lines %}
-                        {% if line.startswith('+') %}<span class="diff-add">{{ line }}</span>{% elif line.startswith('-') %}<span class="diff-del">{{ line }}</span>{% else %}{{ line }}{% endif %}
-                        <br>
-                        {% endfor %}
-                        {% endif %}
-                    </div>
-                    {% endif %}
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-        {% endfor %}
-    </div>
-</div>
-
-<script>
-    function toggle(id) {
-        var element = document.getElementById(id);
-        if (element.style.display === "block") {
-            element.style.display = "none";
-        } else {
-            element.style.display = "block";
-        }
     }
 </script>
 

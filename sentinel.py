@@ -353,6 +353,17 @@ def parse_audit_log(start_time: datetime):
 
 
 def main():
+    print(f"{Colors.CYAN}")
+    print(r"""
+  _____       _____            _   _            _      _____       _  __ _ 
+ /     \     / ____|          | | (_)          | |    |  __ \     (_)/ _| |
+|   |   |   | (___   ___ _ __ | |_ _ _ __   ___| |____| |  | |_ __ _| |_| |_ 
+ \  |  /     \___ \ / _ \ '_ \| __| | '_ \ / _ \ |____| |  | | '__| |  _| __|
+  \ | /      ____) |  __/ | | | |_| | | | |  __/ |    | |__| | |  | | | | |_ 
+   \|/      |_____/ \___|_| |_|\__|_|_| |_|\___|_|    |_____/|_|  |_|_|  \__|
+    """)
+    print(f"{Colors.ENDC}")
+
     parser = argparse.ArgumentParser(
         description="Sentinel-Drift 🛡️ - Configuration Drift Detection & Remediation Tool",
         formatter_class=argparse.RawTextHelpFormatter

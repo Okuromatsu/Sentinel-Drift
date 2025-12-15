@@ -2,6 +2,8 @@
 
 **Sentinel-Drift** is a lightweight agentless, open-source tool to detect and fix configuration drift across your server fleet. It compares the actual state of configuration files on your servers against a "Source of Truth" (SoT) stored in this repository.
 
+![image](https://raw.githubusercontent.com/Okuromatsu/Sentinel-Drift/refs/heads/assets/Assets/ASCII_Title.png)
+
 ## 🚀 Features
 
 *   **Source of Truth**: Define your desired configuration states in the `source_of_truth/` folder.
@@ -117,6 +119,7 @@ Creates a `report.html` dashboard after the audit.
 ```bash
 ./sentinel.py --report
 ```
+![image](https://raw.githubusercontent.com/Okuromatsu/Sentinel-Drift/refs/heads/assets/Assets/HTML_Report.png)
 
 **Interactive Fix Mode:**
 Asks you for confirmation before fixing each detected drift.
